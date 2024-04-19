@@ -1,0 +1,96 @@
+```{r}
+# Load necessary libraries
+library(tidyverse)   # For data manipulation and visualization
+library(glmnet)      # For ridge and lasso regression
+library(randomForest)# For random forest modeling
+library(mgcv)        # For generalized additive models (GAM)
+library(splines)     # For spline models
+
+# Read the datasets
+train_data <- read.csv("train.csv")
+test_data <- read.csv("test.csv")
+
+# Quick overview of the data
+summary(train_data)
+str(train_data)
+
+# Remove predictors from train data
+train_data <- train_data[, !(names(train_data) %in% c("album_name", "id", "track_name"))]
+
+# Remove predictors from test data
+test_data <- test_data[, !(names(test_data) %in% c("album_name", "id", "track_name"))]
+```
+
+```{r}
+# Checking for NA values and removing or imputing them
+train_data <- na.omit(train_data) # This removes rows with NA values
+
+# Encoding categorical variables (if any) using model.matrix, which also handles dummy variables
+train.mat <- model.matrix(popularity ~ . - 1, data = train_data) # '-1' to exclude intercept
+test.mat <- model.matrix(~ . - 1, data = test_data)
+
+# Extracting popularity scores
+train_popularity <- train_data$popularity
+```
+
+```{r}
+
+#Fit a linear model using the new train data  
+linear.model = lm(popularity~., data = train_data)
+lm.fit = lm(popularity~., data=train_data, subset=train)
+
+# Exclude the album_name variable# Exclude the albtrainum_name variable
+# Identify test set rows with levels not present in the training set
+valid_test <- test_data$album_name %in% levels(train_data$album_name)
+
+# Fit linear model on train data
+lm_model <- glm(popularity ~ ., data = train_data)
+
+# Predict on test data
+test_predictions <- predict(lm_model, newdata = test_data)
+```
+
+```{r}
+# Lasso and Ridge Regression
+set.seed(123) # For reproducibility
+cv_lasso <- cv.glmnet(train.mat, train_popularity, alpha = 1) # Lasso
+cv_ridge <- cv.glmnet(train.mat, train_popularity, alpha = 0) # Ridge
+
+# Choosing lambda that gives minimum mean cross-validated error
+lasso_model <- glmnet(train.mat, train_popularity, alpha = 1, lambda = cv_lasso$lambda.min)
+ridge_model <- glmnet(train.mat, train_popularity, alpha = 0, lambda = cv_ridge$lambda.min)
+
+print(lasso_model)
+print(ridge_model)
+```
+
+
+```{r}
+# Random Forest
+rf_model <- randomForest(popularity ~ ., data = train_data, ntree = 500)
+rf_predictions <- predict(rf_model, newdata = test_data)
+
+print(rf_predictions)
+summary(rf_predictions)
+```
+
+
+```{r}
+# GAM
+gam_model <- gam(popularity ~ s(duration_ms) + s(loudness) + energy + danceability, data = train_data)
+# Now predict using the gam model
+gam_predictions <- predict(gam_model, newdata = test_data)
+```
+
+```{r}
+# Splines
+spline_model <- lm(popularity ~ bs(duration_ms, df = 4) + loudness + energy + danceability, data = train_data)
+
+# Now predict using the spline model
+spline_predictions <- predict(spline_model, newdata = test_data)
+
+print(spline_predictions)
+
+```
+
+
